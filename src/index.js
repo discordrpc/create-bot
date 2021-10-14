@@ -1,140 +1,20 @@
 /**
- * @file Main process execution file 
+ * @file index file for NodeJS execution
  * 
- * @implements {file:Utils:checkDeps}
- * @implements {file:Main:init}
+ * @requires node:path:join
+ * @requires node:path:resolve
+ * @requires node:fs:stat
+ * @requires node:fs:createWriteStream
+ * @requires node:fs:readFile
+ * @requires node:fs:writeFile
+ * @requires node:readline
+ * @requires file:Utils:getDate
+ * @requires file:Utils:getTime
  */
 
 
-async function start() {
-    const Discord = require('discord.js');
-    const { join } = require('path');
-    const { readFile, writeFile, createWriteStream, readdirSync, rmSync, statSync } = require('fs');
-    const utils = require('./Utils');
 
-    class DiscordBot extends Discord.Client {
-        constructor (options) {
-            super(options);
-
-            this.config = require('./data/config.json');
-            this.owner = this.config.owner;
-            this.utils = utils;
-            this.loadLogs();
-            this.loadEvents();
-            this.loadCommands();
-            this.loadDatabase();
-            this.login('ODk3OTg3Mzc0Njc0NDg1MzA5.YWdp6Q.GAo7_RkUky9SdxtbL43H_Ehync0');
-        }
-
-        loadEvents() {
-
-        }
-
-        loadCommands() {
-
-        }
-
-        loadDatabase() {
-
-        }
-
-        loadLogs() {
-            // Get file name
-            let date = this.utils.getDate();
-            let time = this.utils.getTime('-');
-            let logDir = join(__dirname, this.config.logs?.directory);
-            this.logFile = join(logDir + date + '-' + time + '.log');
-
-            // Array of files
-            let files = readdirSync(join(__dirname, './data/logs/'))
-                        .filter(file => file.endsWith('.log') && !file.startsWith('example'));
-
-            // Old file removal vars
-            let oldestFile, index;
-            let birthTime = Infinity;
-            let iterate = files.length - 1;
-
-            // Iterate and remove oldest
-            for (let i = 0; i < iterate; i++) {
-                for (let fileI in files) {
-                    let file = files[fileI];
-                    try {
-                        let stats = statSync(logs + file);
-                        if (stats.birthtimeMs < birthTime) {
-                            birthTime = stats.birthtimeMs;
-                            oldestFile = file;
-                            index = fileI;
-                        }
-                    } catch(e) {
-                        console.log(`Couldn't grab stats for ${file}!\n` + e);
-                        continue;
-                    }
-                }
-                    
-                try {
-                    rmSync(logs + oldestFile);
-                    birthTime = Infinity;
-                    index = undefined;
-                    oldestFile = undefined;
-                } catch(e) {
-                    console.log(`Couldn't delete ${oldestFile}!\n` + e);
-                    continue;
-                }
-            }
-
-            // Log function
-            this.log = (data = '') => {
-                if (data.length < 1) return;
-
-                let time = this.utils.getTime();
-
-                let msg = time + ' >> ' + data;
-                let writeStream = createWriteStream(this.logFile, { flags: 'a' });
-
-                writeStream.on('error', (e) => { console.log(time + ' >> Failed to log "' + data + '"!\n' + e); });
-
-                writeStream.write(msg + '\n');
-                console.log(msg);
-            }
-
-            this.log('Logs loaded!');
-        }
-    }
-
-    // Load client config
-    async function loadConfig() {
-        return await new Promise((resolve, reject) => {
-            let configPath = join(__dirname, './data/config.json');
-
-            // Read config file
-            return readFile(configPath, 'utf8', (err, data) => {
-                if (err) console.log(err);
-                data = JSON.parse(data);
-
-                let writeable = false;
-                
-                if (data.intents?.length < 1) {
-                    data.intents = ['GUILDS', 'GUILD_MEMBERS', 'GUILD_BANS', 'GUILD_MESSAGES', 'DIRECT_MESSAGES'];
-                    writeable = true;
-                }
-
-                if (!data.logs || !data.logs?.directory || !data.logs?.max) {
-                    data.logs = { 'directory': join(__dirname, './data/logs/'), 'max': 20 }
-                    writeable = true;
-                }
-
-                // Write data to file
-                if (writeable) writeFile(configPath, JSON.stringify(data), (err) => {
-                    if (err) console.log(err);
-                });
-                
-                let options = { shards: 'auto', intents: data.intents };
-                resolve(options);
-            });
-        });
-    }
-
-    // Check required dependencies are installed
+async function preInit() {
     async function checkDeps() {
         await new Promise((resolve, reject) => {
             console.log('Checking dependencies...');
@@ -147,16 +27,16 @@ async function start() {
             for (let dep of deps) {
                 try {
                     require.resolve(dep);
-                    console.log(`Dependency ${dep} found!`);
+                    console.log(`Success: Dependency found '${dep}'`);
                 } catch (e) {
                     console.warn(`Installing dependency ${dep}...`);
 
                     exec(`npm install ${dep}`, (error, stdout, stderr) => {
                         if (error) {
-                            console.error(`Failed to install ${dep}!`);
+                            console.error(`Error: Failed to install dependency '${dep}'`);
                             failedInstalls.push(dep);
                         } else {
-                            console.log(`Installed ${dep}!`);
+                            console.log(`Success: Installed dependency '${dep}'`);
                         }
         
                         if (stderr) {
@@ -168,7 +48,7 @@ async function start() {
 
             // Exit if dependencies are missing
             if (failedInstalls.length > 0) {
-                console.error(`Failed to install dependencies: ${failedInstalls.join(', ')}`);
+                console.error(`Error: Failed to install all dependencies '${failedInstalls.join(', ')}'`);
                 process.exit();
             }
 
@@ -177,18 +57,170 @@ async function start() {
     }
 
     await checkDeps();
-
-    let options = await loadConfig();
-    const client = new DiscordBot(options);
-    module.exports = client;
-
-    // Error handling
-    process.on('uncaughtException', errorHandling);
-    process.on('unhandledRejection', errorHandling);
-
-    async function errorHandling(err) {
-        // Error handling
-    }
 }
 
-start();
+async function init() {
+    const { resolve: pathResolve, join } = require('path');
+    const { stat, createWriteStream, readFile, writeFile, readdirSync } = require('fs');
+    const readline = require('readline');
+    const DiscordBot = require('./bot');
+    const { getDate, getTime } = require('./Utils');
+
+    const CONFIG_LOCATION = pathResolve('src/data/config.json'); // Location of config file
+
+    async function loadConfig() {
+        return await new Promise(resolve => {
+            console.log('Loading config...');
+
+            stat(CONFIG_LOCATION, async (err, stat) => {
+                if (!err) {
+                    console.log('Success: Config file found');
+                    readFile(CONFIG_LOCATION, 'utf8', (err, data) => {
+                        if (err) {
+                            console.error(err);
+                            process.exit();
+                        }
+        
+                        data = JSON.parse(data);
+                        let write = false;
+        
+                        if (data.owner == undefined) {
+                            data.owner = 'unknown';
+                            write = true;
+                        } if (data.options == undefined){
+                            data.options = { intents: ['GUILDS'] };
+                            write = true;
+                        } if (data.logs == undefined){
+                            data.logs = { max: 20, directory: pathResolve('src/data/logs/') };
+                            write = true;
+                        }
+        
+                        if (write) {
+                            writeFile(CONFIG_LOCATION, JSON.stringify(data), (err) => {
+                                if (err) console.error(err);
+                            });
+                        }
+    
+                        resolve(data);
+                    });
+                }
+        
+                else if (err.code == 'ENOENT') {
+                    console.error(`Error: No such file or directory '${CONFIG_LOCATION}'`);
+        
+                    let rl = readline.Interface({ input: process.stdin, output: process.stdout });
+                    let createNew = await new Promise(resolve => rl.question('Would you like to create a default config file (Y/N)\n', ans => {
+                        rl.close();
+                        resolve(ans);
+                    }));
+                    
+                    switch (createNew.toLowerCase()) {
+                        case 'y' || 'yes':
+                            let writeStream = createWriteStream(CONFIG_LOCATION, { flags: 'a' });
+                            let defaultData = { 
+                                token: 'unknown',
+                                owner: 'unknown',
+                                options: {
+                                    shards: 'auto',
+                                    intents: [
+                                        'GUILDS',
+                                        'GUILD_MEMBERS',
+                                        'GUILD_BANS',
+                                        'GUILD_MESSAGES',
+                                        'GUILD_MESSAGE_REACTIONS',
+                                        'DIRECT_MESSAGES',
+                                        'DIRECT_MESSAGE_REACTIONS'
+                                    ]
+                                },
+                                logs: {
+                                    max: 20,
+                                    directory: pathResolve('src/data/logs/')
+                                }
+                            };
+                            
+                            writeStream.write(JSON.stringify(defaultData), 'utf8', (e) => {
+                                if (e) throw new Error(e);
+
+                                console.log(`Success: New config file created '${CONFIG_LOCATION}'`);
+                                console.log('IMPORTANT || SET THE CORRECT BOT TOKEN IN THE NEW CONFIG FILE || IMPORTANT');
+                                process.exit();
+                            });
+                            break;
+                        case 'n' || 'no':
+                            console.error(`Error: Config file must be created`);
+                            process.exit();
+                        default:
+                            console.error(`Error: Invalid input '${createNew}', must be Y or N`);
+                            process.exit();
+                    }
+                }
+            });
+        });
+    }
+
+    async function loadLogs(dir, max) {
+        return await new Promise(resolve => {
+            console.log(`Creating new log file...`);
+            if (!dir) {
+                console.error(`Error: Invalid directory '${dir}'`);
+                return false;
+            }
+
+            let logFile = join(dir + '\\' + getDate() + '-' + getTime('-') + '.log');
+
+            if (max > 0) {
+                let files = readdirSync(dir)
+                            .filter(file => file.endsWith('.log') && !file.startsWith('example'));
+
+                let oldestFile, index;
+                let birthTime = Infinity;
+                let iterate = files.length - 1;
+
+                for (let i = 0; i < iterate; i++) {
+                    for (let fileI in files) {
+                        let file = files[fileI];
+                        try {
+                            let stats = statSync(logs + file);
+                            if (stats.birthtimeMs < birthTime) {
+                                birthTime = stats.birthtimeMs;
+                                oldestFile = file;
+                                index = fileI;
+                            }
+                        } catch(e) {
+                            console.error(`Error: Couldn't grab stats '${file}'\n${e}`);
+                            continue;
+                        }
+                    }
+                        
+                    try {
+                        rmSync(logs + oldestFile);
+                        birthTime = Infinity;
+                        index = undefined;
+                        oldestFile = undefined;
+                        console.log(`Success: Removed log file '${oldestFile}'`);
+                    } catch(e) {
+                        console.error(`Error: Couldn't delete file '${oldestFile}'\n${e}`);
+                        continue;
+                    }
+                }
+            }
+
+            resolve(logFile);
+        });
+    }
+
+    let data = await loadConfig();
+    let currentFile = await loadLogs(data.logs?.directory, data.logs?.max);
+    if (!currentFile) {
+        data.logs.enabled = false;
+    } else {
+        data.logs.current = currentFile;
+        data.logs.enabled = true;
+    }
+
+    let client = new DiscordBot(data);
+    module.exports = client;
+}
+
+preInit();
+init();
