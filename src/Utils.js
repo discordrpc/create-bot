@@ -1,58 +1,27 @@
 /**
  * @file Utilities that can be used within program code
- * 
- * @implements {node:child_process:exec}
  */
- const { exec } = require('child_process');
 
-
-/**
- * Checks {@link ../package-lock.json} for required dependencies and installs them
- * using the command line if they're missing.
- */
- function checkDeps() {
-    console.log('Checking dependencies...');
-
-    // Get dependency data
-    let deps = require('../package-lock.json');
-    deps = Object.keys(deps.packages[''].dependencies);
-
-    // List of dependencies that failed to install
-    let failedInstalls = [];
-
-    // Iterate data and install missing dependencies
-    for (let dep of deps) {
-        try {
-            require.resolve(dep);
-            console.log(`Dependency ${dep} found!`);
-        } catch (e) {
-            console.warn(`Installing dependency ${dep}...`);
-            
-            // Execute shell command to install dependency
-            exec(`npm install ${dep}`, (error, stdout, stderr) => {
-                if (error) {
-                    console.error(`Failed to install ${dep}!`);
-                    failedInstalls.push(dep);
-                } else {
-                    console.log(`Installed ${dep}!`);
-                }
-
-                if (stderr) {
-                    console.error(stderr);
-                }
-            })
-        }
-    }
-
-    // Exit process if dependencies are missing
-    if (failedInstalls.length > 0) {
-        console.error(`Failed to install dependencies: ${failedInstalls.join(', ')}`);
-        console.error(`Advised to install them manually!`);
-        process.exit();
-    }
+// Get formatted UTC date
+function getDate(con = '-') {
+    let date = new Date();
+    let fullDate = date.getUTCFullYear();
+    fullDate = ((date.getUTCMonth()+1) < 10 ? fullDate + con + '0' + parseInt(date.getUTCMonth()+1) : fullDate + con + parseInt(date.getUTCMonth()+1));
+    fullDate = (date.getUTCDate() < 10 ? fullDate + con + '0' + date.getUTCDate() : fullDate + con + date.getUTCDate());
+    return fullDate;
 }
 
-// Export util functions
+// Get formatted UTC time
+function getTime(con = ':') {
+    let date = new Date();
+    let timestamp = date.getUTCHours() < 10 ? '0' + date.getUTCHours() : date.getUTCHours();
+    timestamp = (date.getUTCMinutes() < 10 ? timestamp + con + '0' + date.getUTCMinutes() : timestamp + con + date.getUTCMinutes());
+    timestamp = (date.getUTCSeconds() < 10 ? timestamp + con + '0' + date.getUTCSeconds() : timestamp + con + date.getUTCSeconds());
+    return timestamp;
+}
+
+// Export util data
 module.exports = {
-    checkDeps
+    getDate,
+    getTime
 }
