@@ -1,0 +1,10 @@
+00:00:00 >> Starting log system...
+00:00:00 >> Initializing client...
+00:00:00 >> Applying shards
+00:00:00 >> Applying intents
+00:00:00 >> Client initialized!
+00:00:00 >> Initialzing database connection...
+00:00:00 >> Starting file transfer
+00:00:00 >> Files transferred!
+00:00:00 >> User ${id2} was banned by ${id2} for ${reason}
+00:00:00 >> Shutting down... goodbye!
