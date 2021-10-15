@@ -4,6 +4,7 @@
  * @requires node:path:join
  * @requires node:path:resolve
  * @requires node:fs:stat
+ * @requires node:fs:rm
  * @requires node:fs:createWriteStream
  * @requires node:fs:readFile
  * @requires node:fs:writeFile
@@ -15,26 +16,36 @@
 
 
 /**
- * @function preInit
+ * @function start
  * @async
  * 
- * @description Executes as a pre initialization function when the program
+ * @description Executes as an initialization function when the program
  * is executed using NodeJS.
  */
-async function preInit() {
+async function start() {
+    // Import dependencies
+    const { resolve: pathResolve, join } = require('path');
+    const { stat, rmSync, createWriteStream, readFile, writeFile, readdirSync } = require('fs');
+    const readline = require('readline');
+    const DiscordBot = require('./bot');
+    const { getDate, getTime } = require('./Utils');
+    const { exec } = require('child_process');
+
+    // Location of config file
+    const CONFIG_LOCATION = pathResolve('src/data/config.json');
 
     /**
-     * @function checkDeps
-     * @async
-     * 
-     * @description Checks the {@link ../package-lock.json} file for required
-     * dependencies. If any are missing they are installed using NPM and the
-     * available command line.
-     */
+    * @function checkDeps
+    * @async
+    * 
+    * @description Checks the {@link ../package-lock.json} file for required
+    * dependencies. If any are missing they are installed using NPM and the
+    * available command line.
+    */
     async function checkDeps() {
 
         // Promise used to await the function
-        await new Promise((resolve, reject) => {
+        await new Promise(resolve => {
             console.log('Checking dependencies...');
 
             // Get required dependencies
@@ -46,6 +57,8 @@ async function preInit() {
 
             // Iterate over dependencies
             for (let dep of deps) {
+                if (dep == 'discord-api-types') dep = 'discord-api-types/v9';
+                
                 try {
                     // Check if the dependency exists
                     require.resolve(dep);
@@ -54,7 +67,7 @@ async function preInit() {
                     console.warn(`Installing dependency ${dep}...`);
 
                     // Attempt to install the missing dependency
-                    exec(`npm install ${dep}`, (error, stdout, stderr) => {
+                    exec(`npm install ${dep}`, async (error, stdout, stderr) => {
                         if (error) {
                             console.error(`Error: Failed to install dependency '${dep}'`);
                             failedInstalls.push(dep);
@@ -78,27 +91,6 @@ async function preInit() {
             resolve();
         });
     }
-
-    await checkDeps();
-}
-
-/**
- * @function init
- * @async
- * 
- * @description Executes as an initialization function when the program
- * is executed using NodeJS. Runs after @function preInit
- */
-async function init() {
-    // Import dependencies
-    const { resolve: pathResolve, join } = require('path');
-    const { stat, createWriteStream, readFile, writeFile, readdirSync } = require('fs');
-    const readline = require('readline');
-    const DiscordBot = require('./bot');
-    const { getDate, getTime } = require('./Utils');
-
-    // Location of config file
-    const CONFIG_LOCATION = pathResolve('src/data/config.json');
 
     /**
      * @function loadConfig
@@ -145,7 +137,7 @@ async function init() {
         
                         // Write to file with missing elements
                         if (write) {
-                            writeFile(CONFIG_LOCATION, JSON.stringify(data), (err) => {
+                            writeFile(CONFIG_LOCATION, JSON.stringify(data, null, 4), (err) => {
                                 if (err) console.error(err);
                             });
                         }
@@ -195,7 +187,7 @@ async function init() {
                             };
                             
                             // Write default data to file
-                            writeStream.write(JSON.stringify(defaultData), 'utf8', (e) => {
+                            writeStream.write(JSON.stringify(defaultData, null, 4), 'utf8', (e) => {
                                 if (e) throw new Error(e);
 
                                 console.log(`Success: New config file created '${CONFIG_LOCATION}'`);
@@ -240,46 +232,21 @@ async function init() {
 
             let logFile = join(dir + '\\' + getDate() + '-' + getTime('-') + '.log');
 
-            if (max > 0) {
-                let files = readdirSync(dir)
-                            .filter(file => file.endsWith('.log') && !file.startsWith('example'));
-
-                let oldestFile, index;
-                let birthTime = Infinity;
-                let iterate = files.length - 1;
-
-                for (let i = 0; i < iterate; i++) {
-                    for (let fileI in files) {
-                        let file = files[fileI];
-                        try {
-                            let stats = statSync(logs + file);
-                            if (stats.birthtimeMs < birthTime) {
-                                birthTime = stats.birthtimeMs;
-                                oldestFile = file;
-                                index = fileI;
-                            }
-                        } catch(e) {
-                            console.error(`Error: Couldn't grab stats '${file}'\n${e}`);
-                            continue;
-                        }
-                    }
-                        
-                    try {
-                        rmSync(logs + oldestFile);
-                        birthTime = Infinity;
-                        index = undefined;
-                        oldestFile = undefined;
-                        console.log(`Success: Removed log file '${oldestFile}'`);
-                    } catch(e) {
-                        console.error(`Error: Couldn't delete file '${oldestFile}'\n${e}`);
-                        continue;
-                    }
+            let files = readdirSync(dir).filter(file => file.endsWith('.log') && !file.startsWith('example'));
+            if (files.length > max && max > 0) {
+                let iterate = files.length - max;
+                for (let i = 0; i < (iterate+1); i++) {
+                    rmSync(dir + '\\' + files[i]);
+                    console.log(`Success: Removed log file '${files[i]}'`);
                 }
             }
 
             resolve(logFile);
         });
     }
+
+    // Check dependencies
+    await checkDeps();
 
     // Get config data and log directory
     let data = await loadConfig();
@@ -296,6 +263,4 @@ async function init() {
     module.exports = client;
 }
 
-// Initialize
-preInit();
-init();
+start();
